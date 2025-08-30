@@ -1,0 +1,184 @@
+1.SELECT p.name AS player,
+       tm.name AS team,
+       COUNT(*) AS goals
+FROM match_events e
+JOIN players p ON e.player_id = p.id
+JOIN teams tm ON p.team_id = tm.id
+WHERE e.event_type = 'goal'
+GROUP BY p.name, tm.name
+ORDER BY goals DESC;
+
+2.Count Total Goals per Team in a Tournament
+
+SELECT tr.name AS tournament,
+       tm.name AS team,
+       COUNT(*) AS total_goals
+FROM match_events e
+JOIN matches m ON e.match_id = m.id
+JOIN tournaments tr ON m.tournament_id = tr.id
+JOIN teams tm ON e.team_id = tm.id
+WHERE e.event_type = 'goal'
+GROUP BY tr.name, tm.name
+ORDER BY total_goals DESC;
+
+3.Tournament Points Table
+
+SELECT team, 
+       SUM(points) AS total_points
+FROM (
+    SELECT ht.name AS team,
+           CASE 
+              WHEN m.home_score > m.away_score THEN 3
+              WHEN m.home_score = m.away_score THEN 1
+              ELSE 0
+           END AS points
+    FROM matches m
+    JOIN teams ht ON m.home_team_id = ht.id
+    UNION ALL
+    SELECT at.name AS team,
+           CASE 
+              WHEN m.away_score > m.home_score THEN 3
+              WHEN m.home_score = m.away_score THEN 1
+              ELSE 0
+           END AS points
+    FROM matches m
+    JOIN teams at ON m.away_team_id = at.id
+)
+GROUP BY team
+ORDER BY total_points DESC;
+
+
+4.top 5 player
+
+SELECT p.name AS player_name,
+       t.name AS team_name,
+       COUNT(*) AS total_goals
+FROM match_events e
+JOIN players p ON e.player_id = p.id
+JOIN teams t ON e.team_id = t.id
+WHERE e.event_type = 'goal'
+GROUP BY p.name, t.name
+ORDER BY total_goals DESC
+FETCH FIRST 5 ROWS ONLY;
+SELECT p.name AS player_name,
+       t.name AS team_name,
+       COUNT(*) AS total_goals
+FROM match_events e
+JOIN players p ON e.player_id = p.id
+JOIN teams t ON e.team_id = t.id
+WHERE e.event_type = 'goal'
+GROUP BY p.name, t.name
+ORDER BY total_goals DESC
+FETCH FIRST 5 ROWS ONLY;
+
+5.Fastest Goal in the Tournament
+
+SELECT tr.name AS tournament,
+       p.name AS player,
+       t.name AS team,
+       MIN(e.minute) AS fastest_goal_minute
+FROM match_events e
+JOIN matches m ON e.match_id = m.id
+JOIN tournaments tr ON m.tournament_id = tr.id
+JOIN players p ON e.player_id = p.id
+JOIN teams t ON e.team_id = t.id
+WHERE e.event_type = 'goal'
+GROUP BY tr.name, p.name, t.name
+ORDER BY fastest_goal_minute ASC
+FETCH FIRST 1 ROW ONLY;
+
+6.Most assist in Tournament
+
+SELECT tr.name AS tournament,
+       p.name  AS player,
+       t.name  AS team,
+       COUNT(*) AS total_assists
+FROM match_events e
+JOIN matches m ON e.match_id = m.id
+JOIN tournaments tr ON m.tournament_id = tr.id
+JOIN players p ON e.player_id = p.id
+JOIN teams t ON e.team_id = t.id
+WHERE e.event_type = 'assist'
+  AND tr.id = 1   -- 👈 replace with your tournament_id
+GROUP BY tr.name, p.name, t.name
+ORDER BY total_assists DESC
+FETCH FIRST 1 ROW ONLY;
+
+7.Find Players Who Never Got a Card
+
+SELECT p.name, t.name AS team
+FROM players p
+JOIN teams t ON p.team_id = t.id
+WHERE p.id NOT IN (
+    SELECT DISTINCT player_id
+    FROM match_events
+    WHERE event_type IN ('yellow','red')
+);
+
+8.Players Who Scored in Both Halves of a Match
+
+SELECT DISTINCT p.name AS player, m.id AS match_id
+FROM match_events e
+JOIN players p ON e.player_id = p.id
+JOIN matches m ON e.match_id = m.id
+WHERE e.event_type = 'goal'
+  AND EXISTS (
+       SELECT 1 FROM match_events e2
+       WHERE e2.match_id = e.match_id
+         AND e2.player_id = e.player_id
+         AND e2.event_type = 'goal'
+         AND e2.minute <= 45
+   )
+  AND EXISTS (
+       SELECT 1 FROM match_events e3
+       WHERE e3.match_id = e.match_id
+         AND e3.player_id = e.player_id
+         AND e3.event_type = 'goal'
+         AND e3.minute > 45
+   );
+9.Top 5 Players by Combined Goals + Assists
+
+SELECT p.name AS player,
+       t.name AS team,
+       COUNT(*) AS total_contributions
+FROM match_events e
+JOIN players p ON e.player_id = p.id
+JOIN teams t ON e.team_id = t.id
+WHERE e.event_type IN ('goal', 'pen_scored')
+GROUP BY p.name, t.name
+ORDER BY total_contributions DESC
+FETCH FIRST 5 ROWS ONLY;
+
+
+10.Find Winner of Completed Matches
+
+SELECT m.id,
+       ht.name AS home_team,
+       at.name AS away_team,
+       CASE
+           WHEN m.home_score > m.away_score THEN ht.name
+           WHEN m.home_score < m.away_score THEN at.name
+           ELSE 'Draw'
+       END AS winner
+FROM matches m
+JOIN teams ht ON m.home_team_id = ht.id
+JOIN teams at ON m.away_team_id = at.id
+WHERE m.status = 'completed';
+
+11.Show Matches with Scores
+
+SELECT m.id,
+       tr.name AS tournament,
+       m.match_datetime,
+       ht.name AS home_team,
+       m.home_score,
+       at.name AS away_team,
+       m.away_score,
+       m.status
+FROM matches m
+JOIN tournaments tr ON m.tournament_id = tr.id
+JOIN teams ht ON m.home_team_id = ht.id
+JOIN teams at ON m.away_team_id = at.id;
+
+
+
